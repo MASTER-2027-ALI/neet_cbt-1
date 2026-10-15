@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEET 2027 CBT - Login</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="login-container">
+  <div class="login-box">
+    <div class="logo">🧬</div>
+    <h1>NEET 2027 CBT</h1>
+    <p class="subtitle">Class 11 Biology - Complete Test Series</p>
+    <div class="input-group">
+      <label>Enter Your Passkey</label>
+      <input type="password" id="passkeyInput" placeholder="XXXX-XXXX-XXXX" autocomplete="off">
+    </div>
+    <button onclick="checkPasskey()" class="btn-login" id="loginBtn">🔓 Unlock Now</button>
+    <div id="errorMsg" class="error-msg"></div>
+    <p class="footer-text">© 2027 NEET CBT | All Rights Reserved</p>
+  </div>
+</div>
+
+<script type="module">
+import { checkActiveSession, setActiveSession } from './firebase.js';
+
+// Load keys
+const script = document.createElement('script');
+script.src = 'keys.js';
+script.onload = () => {
+  window.MASTER_KEY = MASTER_KEY;
+  window.FRIEND_KEYS = FRIEND_KEYS;
+};
+document.head.appendChild(script);
+
+window.checkPasskey = async function() {
+  const input = document.getElementById('passkeyInput').value.trim().toUpperCase();
+  const errorMsg = document.getElementById('errorMsg');
+  const loginBtn = document.getElementById('loginBtn');
+
+  if (!input) {
+    errorMsg.textContent = '⚠️ Please enter a passkey';
+    errorMsg.style.display = 'block';
+    return;
+  }
+
+  let user = null;
+  let isMaster = false;
+
+  if (input === MASTER_KEY) {
+    isMaster = true;
+    user = { name: 'Admin', role: 'master' };
+  } else {
+    for (const key in FRIEND_KEYS) {
+      if (FRIEND_KEYS[key].key === input) {
+        user = { name: FRIEND_KEYS[key].name, role: 'friend' };
+        break;
+      }
+    }
+  }
+
+  if (!user) {
+    errorMsg.textContent = '❌ Invalid Passkey. Please try again.';
+    errorMsg.style.display = 'block';
+    document.getElementById('passkeyInput').value = '';
+    document.getElementById('passkeyInput').focus();
+    return;
+  }
+
+  // Show loading
+  loginBtn.textContent = '⏳ Checking...';
+  loginBtn.disabled = true;
+
+  // For friends, check active session
+  if (user.role === 'friend') {
+    const sessionCheck = await checkActiveSession(user.name);
+    if (sessionCheck.active) {
+      errorMsg.textContent = sessionCheck.message;
+      errorMsg.style.display = 'block';
+      loginBtn.textContent = '🔓 Unlock Now';
+      loginBtn.disabled = false;
+      return;
+    }
+    // Set new active session
+    await setActiveSession(user.name, input);
+  }
+
+  // Save user to localStorage
+  localStorage.setItem('cbt_user', JSON.stringify(user));
+  localStorage.setItem('cbt_login_time', new Date().toISOString());
+  
+  window.location.href = 'dashboard.html';
+};
+
+document.getElementById('passkeyInput').addEventListener('keypress', function(e) {
+  if (e.key === 'Enter') checkPasskey();
+});
+</script>
+</body>
+</html>

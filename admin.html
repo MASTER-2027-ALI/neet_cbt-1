@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin Panel - NEET 2027 CBT</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  .admin-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: rgba(30, 41, 59, 0.85);
+    border-radius: 16px;
+    overflow: hidden;
+    margin-top: 20px;
+    font-size: 13px;
+  }
+  .admin-table th, .admin-table td {
+    padding: 12px 14px;
+    text-align: left;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.15);
+  }
+  .admin-table th {
+    background: rgba(59, 130, 246, 0.15);
+    color: #93c5fd;
+    font-weight: 700;
+    text-transform: uppercase;
+    font-size: 11px;
+    letter-spacing: 1px;
+  }
+  .admin-table tr:hover {
+    background: rgba(59, 130, 246, 0.08);
+  }
+  .admin-table tr.best-row {
+    background: rgba(74, 222, 128, 0.08);
+  }
+  .admin-table td.score { color: #4ade80; font-weight: 700; }
+  .admin-table td.low { color: #f87171; font-weight: 700; }
+  .admin-card {
+    background: rgba(30, 41, 59, 0.85);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    border-radius: 16px;
+    padding: 25px;
+    margin-bottom: 20px;
+  }
+  .admin-card h2 { color: #60a5fa; font-size: 18px; margin-bottom: 15px; }
+  .no-data { text-align: center; padding: 40px; color: #94a3b8; font-size: 14px; }
+  .table-scroll { overflow-x: auto; }
+</style>
+</head>
+<body>
+<div class="dashboard-container">
+  <div class="dash-header">
+    <h1>👑 Admin Panel - NEET 2027 CBT</h1>
+    <div class="user-info">
+      <span class="user-badge">👑 Master Admin</span>
+      <a href="dashboard.html" class="btn-logout" style="text-decoration:none;">📚 Dashboard</a>
+      <button class="btn-logout" onclick="logout()">🚪 Logout</button>
+    </div>
+  </div>
+
+  <div class="admin-card">
+    <h2>📊 Overall Statistics</h2>
+    <div class="stats-bar">
+      <div class="stat-card">
+        <div class="num" id="totalFriends">0</div>
+        <div class="label">Active Users</div>
+      </div>
+      <div class="stat-card">
+        <div class="num" id="totalAttempts">0</div>
+        <div class="label">Total Attempts</div>
+      </div>
+      <div class="stat-card">
+        <div class="num" id="attemptedChapters">0</div>
+        <div class="label">Chapters Attempted</div>
+      </div>
+      <div class="stat-card">
+        <div class="num" id="avgScore">0%</div>
+        <div class="label">Average Score</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="admin-card">
+    <h2>📋 Complete Test History (All Users)</h2>
+    <div id="historyTable">
+      <div class="no-data">⏳ Loading from cloud...</div>
+    </div>
+  </div>
+
+  <div class="admin-card">
+    <h2>🔑 All Passkeys</h2>
+    <div class="table-scroll">
+      <table class="admin-table">
+        <thead>
+          <tr><th>#</th><th>Name</th><th>Passkey</th></tr>
+        </thead>
+        <tbody id="keysTable"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { getAllResults } from './firebase.js';
+
+// Check login - only master
+const userData = localStorage.getItem('cbt_user');
+if (!userData) {
+  window.location.href = 'index.html';
+}
+const user = JSON.parse(userData);
+if (user.role !== 'master') {
+  alert('⚠️ Access Denied! Only Admin can view this page.');
+  window.location.href = 'dashboard.html';
+}
+
+// Chapter names
+const chapterNames = [
+  "The Living World", "Biological Classification", "Plant Kingdom",
+  "Animal Kingdom", "Morphology of Flowering Plants", "Anatomy of Flowering Plants",
+  "Structural Organisation in Animals", "Cell: The Unit of Life", "Biomolecules",
+  "Cell Cycle and Cell Division", "Photosynthesis in Higher Plants", "Respiration in Plants",
+  "Plant Growth and Development", "Breathing and Exchange of Gases", "Body Fluids and Circulation",
+  "Excretory Products and their Elimination", "Locomotion and Movement",
+  "Neural Control and Coordination", "Chemical Coordination and Integration"
+];
+
+// Load all results
+async function loadAdminPanel() {
+  const allResults = await getAllResults();
+  
+  const historyDiv = document.getElementById('historyTable');
+  
+  if (allResults.length === 0) {
+    historyDiv.innerHTML = '<div class="no-data">📭 Abhi tak koi test nahi diya gaya.<br><br>Jab aap ya aapke dost test denge, unke results yahan dikhenge.</div>';
+    return;
+  }
+
+  // Calculate stats
+  const uniqueUsers = new Set(allResults.map(r => r.userName)).size;
+  const totalAttempts = allResults.length;
+  const uniqueChapters = new Set(allResults.map(r => r.chapterNum)).size;
+  const avgPercent = (allResults.reduce((sum, r) => sum + parseFloat(r.percent), 0) / totalAttempts).toFixed(1);
+
+  document.getElementById('totalFriends').textContent = uniqueUsers;
+  document.getElementById('totalAttempts').textContent = totalAttempts;
+  document.getElementById('attemptedChapters').textContent = uniqueChapters;
+  document.getElementById('avgScore').textContent = avgPercent + '%';
+
+  // Build table
+  let tableHTML = `
+    <div class="table-scroll">
+      <table class="admin-table">
+        <thead>
+          <tr>
+            <th>User</th>
+            <th>Chapter</th>
+            <th>Chapter Name</th>
+            <th>Correct</th>
+            <th>Wrong</th>
+            <th>Total</th>
+            <th>Marks</th>
+            <th>Percent</th>
+            <th>Date & Time</th>
+          </tr>
+        </thead>
+        <tbody>
+  `;
+
+  allResults.forEach(r => {
+    const scoreClass = parseFloat(r.percent) >= 50 ? 'score' : 'low';
+    const date = new Date(r.date).toLocaleString('en-IN', {
+      day: '2-digit', month: 'short', year: 'numeric',
+      hour: '2-digit', minute: '2-digit'
+    });
+    
+    tableHTML += `
+      <tr>
+        <td><strong>${r.userName}</strong></td>
+        <td>Ch ${r.chapterNum}</td>
+        <td>${chapterNames[r.chapterNum - 1] || '-'}</td>
+        <td class="score">${r.correct}</td>
+        <td class="low">${r.wrong}</td>
+        <td>${r.total}</td>
+        <td>${r.marks}</td>
+        <td class="${scoreClass}">${r.percent}%</td>
+        <td>${date}</td>
+      </tr>
+    `;
+  });
+
+  tableHTML += '</tbody></table></div>';
+  historyDiv.innerHTML = tableHTML;
+}
+
+// Keys table
+window.addEventListener('load', () => {
+  const script = document.createElement('script');
+  script.src = 'keys.js';
+  script.onload = () => {
+    const keysTable = document.getElementById('keysTable');
+    let keysHTML = `<tr><td>👑</td><td>Master (Admin)</td><td><code>${MASTER_KEY}</code></td></tr>`;
+    let i = 1;
+    for (const k in FRIEND_KEYS) {
+      keysHTML += `<tr><td>${i}</td><td>${FRIEND_KEYS[k].name}</td><td><code>${FRIEND_KEYS[k].key}</code></td></tr>`;
+      i++;
+    }
+    keysTable.innerHTML = keysHTML;
+  };
+  document.head.appendChild(script);
+});
+
+// Logout
+window.logout = function() {
+  localStorage.removeItem('cbt_user');
+  localStorage.removeItem('cbt_login_time');
+  localStorage.removeItem('cbt_session_id');
+  window.location.href = 'index.html';
+};
+
+// Load admin panel
+loadAdminPanel();
+</script>
+</body>
+</html>
